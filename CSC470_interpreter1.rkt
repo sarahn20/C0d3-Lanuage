@@ -1,6 +1,3 @@
-;; The first three lines of this file were inserted by DrRacket. They record metadata
-;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-advanced-reader.ss" "lang")((modname CSC470_interpreter1) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f () #f)))
 ; Enviroment Initializers
 (define empty-env
   (lambda () (list 'empty-env)))
@@ -41,6 +38,10 @@
     (not (eq? (apply-env var-name env) #f))))
 
 ; Grammar Constructors
+(define math-exp
+  (lambda (op lc-exp1 lc-exp2)
+    (list 'math-exp op lc-exp1 lc-exp2)))
+
 (define lit-exp
   (lambda (n)
     (list 'lit-exp n)))
@@ -61,6 +62,18 @@
 (define lc-exp->type
   (lambda (lc-exp)
     (car lc-exp)))
+
+(define math-exp->op
+  (lambda (math-exp)
+    (cadr math-exp)))
+
+(define math-exp->param-1
+  (lambda (math-exp)
+    (caddr math-exp)))
+
+(define math-exp->param-2
+  (lambda (math-exp)
+    (cadddr math-exp)))
 
 (define lit-exp->value
   (lambda (lit-exp)
@@ -87,6 +100,10 @@
     (caddr app-exp)))
 
 ; Grammar Predicates
+(define math-exp?
+  (lambda (lc-exp)
+    (eq? (lc-exp->type lc-exp) 'math-exp)))
+
 (define lit-exp?
   (lambda (lc-exp)
     (eq? (lc-exp->type lc-exp) 'lit-exp)))
@@ -104,6 +121,18 @@
     (eq? (lc-exp->type lc-exp) 'lambda-exp)))
 
 ;C0d3 Extractors
+(define calculate-exp->op
+  (lambda (calculate-exp)
+    (car (cdadr calculate-exp))))
+
+(define calculate-exp->param-1
+  (lambda (calculate-exp)
+    (caadr calculate-exp)))
+
+(define calculate-exp->param-2
+  (lambda (calculate-exp)
+    (car (cdr (cdadr calculate-exp)))))
+
 (define literal-exp->value
   (lambda (literal-exp)
     (cadr literal-exp)))
@@ -133,10 +162,15 @@
 ; (Run (func (x) x) ‘with parameter)
 ; (Get-Value ‘A)
 ; (literal 5)
+; (calculate (x) op (y))
 
 (define parse-expression
   (lambda (c0d3)
     (cond
+      ((eq? (car c0d3) 'calculate) (math-exp
+                                    (calculate-exp->op c0d3)
+                                    (parse-expression (calculate-exp->param-1 c0d3))
+                                    (parse-expression (calculate-exp->param-2 c0d3))))
       ((eq? (car c0d3) 'literal) (lit-exp (literal-exp->value c0d3)))
       ((eq? (car c0d3) 'get-value) (var-exp (get-value-exp->value c0d3)))
       ((eq? (car c0d3) 'func) (lambda-exp (func-exp->parameter c0d3) (parse-expression (func-exp->body c0d3))))
@@ -144,9 +178,11 @@
                               (parse-expression (run-exp->func c0d3))
                               (parse-expression (run-exp->parameter c0d3)))))))
 
+
 (define apply-expression
   (lambda (lcexp env)
     (cond
+      ((math-exp? lcexp) (doMath (math-exp->op lcexp) (apply-expression (math-exp->param-1 lcexp) env) (apply-expression (math-exp->param-2 lcexp) env)))
       ((lit-exp? lcexp) (lit-exp->value lcexp))
       ((var-exp? lcexp) (apply-env (var-exp->var-name lcexp) env))
       ((lambda-exp? lcexp) (apply-expression (lambda-exp->body lcexp) env))
@@ -157,14 +193,18 @@
                           (apply-expression the-lambda the-new-env))))))
                           
 
+(define doMath
+  (lambda (op param1 param2)
+    (cond
+      ((eq? op '+)(+ param1 param2))
+      ((eq? op '-)(- param1 param2))
+      ((eq? op '/)(/ param1 param2))
+      ((eq? op '*)(* param1 param2)))))
+
 (define run-program
   (lambda (c0d3-src env)
     (apply-expression (parse-expression c0d3-src) env)))
-
-(define myC0d3 '(run (func gets (a) does (get-value a)) with (literal 5)))
-(define env (extend-env* '(c d e) '(1 2 3) (empty-env)))
+(define myC0d3 '(calculate ((get-value a)+(literal 7))))
+(define env (extend-env* '(a b c) '(1 2 3) (empty-env)))
 (parse-expression myC0d3)
 (run-program myC0d3 env)
-
-
-         
